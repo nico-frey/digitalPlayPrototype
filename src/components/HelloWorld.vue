@@ -37,37 +37,43 @@ async function loadSVGs(folderPath, render, world, bodies) {
         const properties = new svgPathProperties(pathData);
         const length = properties.getTotalLength();
         const vertices = [];
+        const scaleFactor = 0.2;
 
-        for (let i = 0; i < length; i += 30) {
+        for (let i = 0; i < length; i += 10) {
           const point = properties.getPointAtLength(i);
-          vertices.push({ x: point.x, y: point.y });
+          vertices.push({ x: point.x * scaleFactor, y: point.y * scaleFactor });
         }
 
-        for (let i = 0; i < 40; i++) { // Duplicate each shape 10 times
+        for (let i = 0; i < 10; i++) { // Duplicate each shape 10 times
           const body = Matter.Bodies.fromVertices(
             Matter.Common.random(0, render.options.width),
             Matter.Common.random(0, render.options.height),
-            [vertices],
+            vertices.length > 1 ? Matter.Vertices.hull(vertices) : vertices
+            ,
             {
-              mass: 1,
-              friction: 0.01, // Lower friction for more sliding and rotation
-              frictionAir: 0.005, // Slight air resistance
-              restitution: 0.8, // Increase bounciness
+              mass: 2,
+              friction: 0.1, // Lower friction for more sliding and rotation
+              frictionAir: 0.00001, // Slight air resistance
+              restitution: 0.5, // Increase bounciness
               render: {
                 fillStyle: path.getAttribute('fill') || '#FF0000', // Default color, can be customized
                 strokeStyle: 'none', // No stroke
                 lineWidth: 0, // No stroke width
               },
             },
-            true
+            {
+              // Options for decomposition
+              tolerance: 0.001, // Lower tolerance increases precision
+              quality: 0.9, // Higher quality reduces gaps
+            }
           );
 
           // Add angular damping to slow down rotation over time
-          body.angularDamping = 0.02; // Slow down rotation
-          body.damping = 0.5; // Gradually slow linear movement
+          body.angularDamping = 0.5; // Slow down rotation
+          body.damping = 0.1; // Gradually slow linear movement
 
           Matter.Body.rotate(body, Matter.Common.random(0, Math.PI * 2));
-          Matter.Body.setAngularVelocity(body, Matter.Common.random(-0.1, 0.1));
+          Matter.Body.setAngularVelocity(body, Matter.Common.random(-0.01, 0.01));
 
           Matter.World.add(world, body);
           bodies.push(body);
@@ -103,10 +109,10 @@ onMounted(async () => {
     element: scene.value,
     engine: engine,
     options: {
-      width: window.innerWidth,
+      width: 500,
       height: window.innerHeight,
       wireframes: false,
-      background: 'rgb(240,240,240)',
+      background: 'rgb(255,255,255)',
     },
   });
 
@@ -116,10 +122,22 @@ onMounted(async () => {
   Runner.run(runner, engine);
 
   const boundaries = [
-    Bodies.rectangle(render.options.width / 2, -25, render.options.width, 50, { isStatic: true, restitution: 1 }),
-    Bodies.rectangle(render.options.width / 2, render.options.height + 25, render.options.width, 50, { isStatic: true, restitution: 1 }),
-    Bodies.rectangle(-25, render.options.height / 2, 50, render.options.height, { isStatic: true, restitution: 1 }),
-    Bodies.rectangle(render.options.width + 25, render.options.height / 2, 50, render.options.height, { isStatic: true, restitution: 1 }),
+    Bodies.rectangle(render.options.width / 2, -50, render.options.width, 100, {
+      isStatic: true,
+      restitution: 0.5 // Elasticity for boundaries
+    }),
+    Bodies.rectangle(render.options.width / 2, render.options.height + 50, render.options.width, 100, {
+      isStatic: true,
+      restitution: 0.5
+    }),
+    Bodies.rectangle(-50, render.options.height / 2, 100, render.options.height, {
+      isStatic: true,
+      restitution: 0.5
+    }),
+    Bodies.rectangle(render.options.width + 50, render.options.height / 2, 100, render.options.height, {
+      isStatic: true,
+      restitution: 0.5
+    }),
   ];
 
   World.add(world, boundaries);
@@ -144,36 +162,41 @@ onMounted(async () => {
 
   // Clamp body velocity to prevent glitching
   Events.on(engine, 'beforeUpdate', () => {
+    const maxVelocity = 10; // Adjust as needed for reasonable speed
     bodies.forEach((body) => {
-      const maxSpeed = 20; // Adjust as needed
-      if (body.velocity.x > maxSpeed) body.velocity.x = maxSpeed;
-      if (body.velocity.x < -maxSpeed) body.velocity.x = -maxSpeed;
-      if (body.velocity.y > maxSpeed) body.velocity.y = maxSpeed;
-      if (body.velocity.y < -maxSpeed) body.velocity.y = -maxSpeed;
+      if (Math.abs(body.velocity.x) > maxVelocity) {
+        body.velocity.x = Math.sign(body.velocity.x) * maxVelocity;
+      }
+      if (Math.abs(body.velocity.y) > maxVelocity) {
+        body.velocity.y = Math.sign(body.velocity.y) * maxVelocity;
+      }
     });
   });
 
+
   // Reset positions for bodies that escape
   Events.on(engine, 'afterUpdate', () => {
-    bodies.forEach((body) => {
-      if (
-        body.position.x < -50 ||
-        body.position.x > render.options.width + 50 ||
-        body.position.y < -50 ||
-        body.position.y > render.options.height + 50
-      ) {
-        Matter.Body.setPosition(body, {
-          x: Matter.Common.random(50, render.options.width - 50),
-          y: Matter.Common.random(50, render.options.height - 50),
-        });
-      }
-    });
-
     if (!mouse.position.x) return;
 
+    // Smoothly move the attractor/repeller body towards the mouse
     Body.translate(attractiveBody, {
       x: (mouse.position.x - attractiveBody.position.x) * 0.12,
       y: (mouse.position.y - attractiveBody.position.y) * 0.12,
+    });
+
+    // Check mouse button state for repeller or attractor
+    const isRepeller = mouse.button === 0 && mouse.sourceEvents.mousemove?.buttons === 1; // Left-click held
+
+    bodies.forEach((body) => {
+      const dx = attractiveBody.position.x - body.position.x;
+      const dy = attractiveBody.position.y - body.position.y;
+      const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+      const forceMagnitude = (isRepeller ? -0.0005 : 0.0005) * body.mass / distance; // Negative for repeller
+
+      Body.applyForce(body, body.position, {
+        x: dx * forceMagnitude,
+        y: dy * forceMagnitude,
+      });
     });
 
     bodies.forEach((body) => {
