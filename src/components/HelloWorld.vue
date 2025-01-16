@@ -12,11 +12,13 @@ window.decomp = decomp; // Register poly-decomp globally
 
 const scene = ref(null);
 
-async function loadSVGs(folderPath, render, world, bodies) {
+async function loadSVGs(folderPath, render, world, bodies, prefix) {
   const response = await fetch(`${folderPath}/index.json`);
   const files = await response.json();
 
   for (const fileName of files) {
+    if (!fileName.startsWith(prefix)) continue; // Only load shapes with the specified prefix
+
     const svgResponse = await fetch(`${folderPath}/${fileName}`);
     const svgText = await svgResponse.text();
 
@@ -154,7 +156,10 @@ onMounted(async () => {
 
   const bodies = [];
   const svgFolderPath = '/svgs'; // Path to your SVG folder (inside public folder)
-  await loadSVGs(svgFolderPath, render, world, bodies);
+  const prefixes = ['papagei', 'wache']; // List of prefixes
+  let currentPrefixIndex = 0; // Initial index
+
+  await loadSVGs(svgFolderPath, render, world, bodies, prefixes[currentPrefixIndex]);
 
   const mouse = Mouse.create(render.canvas);
 
@@ -170,7 +175,6 @@ onMounted(async () => {
       }
     });
   });
-
 
   // Reset positions for bodies that escape
   Events.on(engine, 'afterUpdate', () => {
@@ -205,6 +209,20 @@ onMounted(async () => {
 
       Body.applyForce(body, body.position, { x: dx * forceMagnitude, y: dy * forceMagnitude });
     });
+  });
+
+  window.addEventListener('keydown', async (event) => {
+    if (event.code === 'Space') {
+      // Remove only the dynamic bodies
+      bodies.forEach(body => Matter.World.remove(world, body));
+      bodies.length = 0;
+
+      // Cycle to the next prefix
+      currentPrefixIndex = (currentPrefixIndex + 1) % prefixes.length;
+
+      // Load new shapes
+      await loadSVGs(svgFolderPath, render, world, bodies, prefixes[currentPrefixIndex]);
+    }
   });
 });
 
