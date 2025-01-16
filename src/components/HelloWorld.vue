@@ -1,7 +1,5 @@
 <template>
-  <div id="app">
-    <div ref="scene"></div>
-  </div>
+  <div ref="scene"></div>
 </template>
 
 <script setup>
@@ -44,7 +42,7 @@ async function loadSVGs(folderPath, render, world, bodies) {
           vertices.push({ x: point.x * scaleFactor, y: point.y * scaleFactor });
         }
 
-        for (let i = 0; i < 10; i++) { // Duplicate each shape 10 times
+        for (let i = 0; i < 20; i++) { // Duplicate each shape 10 times
           const body = Matter.Bodies.fromVertices(
             Matter.Common.random(0, render.options.width),
             Matter.Common.random(0, render.options.height),
@@ -212,10 +210,4 @@ onMounted(async () => {
 
 </script>
 
-<style>
-#app {
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-}
-</style>
+<style></style>
