@@ -12,6 +12,11 @@ window.decomp = decomp; // Register poly-decomp globally
 
 const scene = ref(null);
 
+const shapeProperties = {
+  'papagei': { restitution: 0.6, friction: 0.01, frictionAir: 0.0000001, density: 1, mass: 5, scaleFactor: 0.3, duplicateCount: 10 },
+  'wache': { restitution: 0, friction: 99999999, frictionAir: 0.2, density: 1, mass: 5, scaleFactor: 0.5, duplicateCount: 20 },
+};
+
 async function loadSVGs(folderPath, render, world, bodies, prefix) {
   const response = await fetch(`${folderPath}/index.json`);
   const files = await response.json();
@@ -37,24 +42,24 @@ async function loadSVGs(folderPath, render, world, bodies, prefix) {
         const properties = new svgPathProperties(pathData);
         const length = properties.getTotalLength();
         const vertices = [];
-        const scaleFactor = 0.2;
+        const shapeProps = shapeProperties[prefix] || { restitution: 0.5, friction: 0.1, frictionAir: 0.00001, density: 0.001, mass: 2, scaleFactor: 0.2, duplicateCount: 20 };
 
         for (let i = 0; i < length; i += 10) {
           const point = properties.getPointAtLength(i);
-          vertices.push({ x: point.x * scaleFactor, y: point.y * scaleFactor });
+          vertices.push({ x: point.x * shapeProps.scaleFactor, y: point.y * shapeProps.scaleFactor });
         }
 
-        for (let i = 0; i < 20; i++) { // Duplicate each shape 10 times
+        for (let i = 0; i < shapeProps.duplicateCount; i++) { // Use duplicateCount property
           const body = Matter.Bodies.fromVertices(
             Matter.Common.random(0, render.options.width),
             Matter.Common.random(0, render.options.height),
-            vertices.length > 1 ? Matter.Vertices.hull(vertices) : vertices
-            ,
+            vertices,
             {
-              mass: 2,
-              friction: 0.1, // Lower friction for more sliding and rotation
-              frictionAir: 0.00001, // Slight air resistance
-              restitution: 0.5, // Increase bounciness
+              mass: shapeProps.mass,
+              density: shapeProps.density,
+              friction: shapeProps.friction,
+              frictionAir: shapeProps.frictionAir,
+              restitution: shapeProps.restitution,
               render: {
                 fillStyle: path.getAttribute('fill') || '#FF0000', // Default color, can be customized
                 strokeStyle: 'none', // No stroke
@@ -63,8 +68,8 @@ async function loadSVGs(folderPath, render, world, bodies, prefix) {
             },
             {
               // Options for decomposition
-              tolerance: 0.001, // Lower tolerance increases precision
-              quality: 0.9, // Higher quality reduces gaps
+              tolerance: 0.01, // Lower tolerance increases precision
+              quality: 1, // Higher quality reduces gaps
             }
           );
 
@@ -147,7 +152,7 @@ onMounted(async () => {
     render.options.height / 2,
     Math.max(render.options.width / 8, render.options.height / 8) / 10,
     {
-      render: { fillStyle: 'rgb(240,240,240)', strokeStyle: 'rgb(240,240,240)', lineWidth: 0 },
+      render: { fillStyle: 'rgba(240,240,240,0)', strokeStyle: 'rgb(240,240,240)', lineWidth: 0 },
       isStatic: true,
     }
   );
