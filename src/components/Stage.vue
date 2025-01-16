@@ -13,7 +13,7 @@ window.decomp = decomp; // Register poly-decomp globally
 const scene = ref(null);
 
 const shapeProperties = {
-  'papagei': { restitution: 0.6, friction: 0.01, frictionAir: 0.0000001, density: 1, mass: 5, scaleFactor: 0.3, duplicateCount: 10 },
+  'papagei': { restitution: 0.6, friction: 0.01, frictionAir: 0.0000001, density: 1, mass: 5, scaleFactor: 0.2, duplicateCount: 20 },
   'wache': { restitution: 0, friction: 99999999, frictionAir: 0.2, density: 1, mass: 5, scaleFactor: 0.5, duplicateCount: 20 },
 };
 
