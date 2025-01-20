@@ -1,16 +1,19 @@
 <template>
   <div id="app">
     <Stage />
+    <!-- <InitSerial /> -->
   </div>
 </template>
 
 <script>
+import InitSerial from './components/InitSerial.vue';
 import Stage from './components/Stage.vue';
 
 export default {
   name: 'App',
   components: {
     Stage,
+    InitSerial
   },
 };
 </script>
