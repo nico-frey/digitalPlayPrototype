@@ -83,8 +83,8 @@ async function loadSVGs(folderPath, render, world, bodies, prefix) {
               restitution: shapeProps.restitution,
               render: {
                 fillStyle: path.getAttribute('fill') || '#FF0000', // Default color, can be customized
-                strokeStyle: 'none', // No stroke
-                lineWidth: 0, // No stroke width
+                strokeStyle: path.getAttribute('fill') || '#FF0000', // Stroke in fill color to hide gaps
+                lineWidth: 1, // stroke width 
               },
             },
             {
