@@ -3,8 +3,8 @@
 </template>
 
 <script setup>
+import 'pathseg'; // Import pathseg polyfill
 import * as Matter from 'matter-js';
-import { svgPathProperties } from 'svg-path-properties';
 import { onMounted, ref } from 'vue';
 import decomp from 'poly-decomp';
 
@@ -13,8 +13,24 @@ window.decomp = decomp; // Register poly-decomp globally
 const scene = ref(null);
 
 const shapeProperties = {
-  'papagei': { restitution: 0.6, friction: 0.01, frictionAir: 0.0000001, density: 1, mass: 5, scaleFactor: 0.2, duplicateCount: 20 },
-  'wache': { restitution: 0, friction: 99999999, frictionAir: 0.2, density: 1, mass: 5, scaleFactor: 0.5, duplicateCount: 5 },
+  papagei: {
+    restitution: 0.6,
+    friction: 0.01,
+    frictionAir: 0.0000001,
+    density: 1,
+    mass: 5,
+    scaleFactor: 0.2,
+    duplicateCount: 20,
+  },
+  wache: {
+    restitution: 0,
+    friction: 99999999,
+    frictionAir: 0.2,
+    density: 1,
+    mass: 5,
+    scaleFactor: 0.5,
+    duplicateCount: 5,
+  },
 };
 
 async function loadSVGs(folderPath, render, world, bodies, prefix) {
@@ -39,17 +55,22 @@ async function loadSVGs(folderPath, render, world, bodies, prefix) {
       }
 
       try {
-        const properties = new svgPathProperties(pathData);
-        const length = properties.getTotalLength();
-        const vertices = [];
-        const shapeProps = shapeProperties[prefix] || { restitution: 0.5, friction: 0.1, frictionAir: 0.00001, density: 0.001, mass: 2, scaleFactor: 0.2, duplicateCount: 20 };
+        const shapeProps = shapeProperties[prefix] || {
+          restitution: 0.5,
+          friction: 0.1,
+          frictionAir: 0.00001,
+          density: 0.001,
+          mass: 2,
+          scaleFactor: 0.2,
+          duplicateCount: 20,
+        };
+        const vertices = Matter.Svg.pathToVertices(path, 30).map((vertex) => ({
+          x: vertex.x * shapeProps.scaleFactor,
+          y: vertex.y * shapeProps.scaleFactor,
+        }));
 
-        for (let i = 0; i < length; i += 10) {
-          const point = properties.getPointAtLength(i);
-          vertices.push({ x: point.x * shapeProps.scaleFactor, y: point.y * shapeProps.scaleFactor });
-        }
-
-        for (let i = 0; i < shapeProps.duplicateCount; i++) { // Use duplicateCount property
+        for (let i = 0; i < shapeProps.duplicateCount; i++) {
+          // Use duplicateCount property
           const body = Matter.Bodies.fromVertices(
             Matter.Common.random(0, render.options.width),
             Matter.Common.random(0, render.options.height),
@@ -69,7 +90,7 @@ async function loadSVGs(folderPath, render, world, bodies, prefix) {
             {
               // Options for decomposition
               tolerance: 0.01, // Lower tolerance increases precision
-              quality: 1, // Higher quality reduces gaps
+              quality: 0.1, // Higher quality reduces gaps
             }
           );
 
@@ -129,20 +150,32 @@ onMounted(async () => {
   const boundaries = [
     Bodies.rectangle(render.options.width / 2, -50, render.options.width, 100, {
       isStatic: true,
-      restitution: 0.5 // Elasticity for boundaries
+      restitution: 0.5, // Elasticity for boundaries
     }),
-    Bodies.rectangle(render.options.width / 2, render.options.height + 50, render.options.width, 100, {
-      isStatic: true,
-      restitution: 0.5
-    }),
+    Bodies.rectangle(
+      render.options.width / 2,
+      render.options.height + 50,
+      render.options.width,
+      100,
+      {
+        isStatic: true,
+        restitution: 0.5,
+      }
+    ),
     Bodies.rectangle(-50, render.options.height / 2, 100, render.options.height, {
       isStatic: true,
-      restitution: 0.5
+      restitution: 0.5,
     }),
-    Bodies.rectangle(render.options.width + 50, render.options.height / 2, 100, render.options.height, {
-      isStatic: true,
-      restitution: 0.5
-    }),
+    Bodies.rectangle(
+      render.options.width + 50,
+      render.options.height / 2,
+      100,
+      render.options.height,
+      {
+        isStatic: true,
+        restitution: 0.5,
+      }
+    ),
   ];
 
   World.add(world, boundaries);
@@ -198,7 +231,7 @@ onMounted(async () => {
       const dx = attractiveBody.position.x - body.position.x;
       const dy = attractiveBody.position.y - body.position.y;
       const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-      const forceMagnitude = (isRepeller ? -0.0005 : 0.0005) * body.mass / distance; // Negative for repeller
+      const forceMagnitude = ((isRepeller ? -0.0005 : 0.0005) * body.mass) / distance; // Negative for repeller
 
       Body.applyForce(body, body.position, {
         x: dx * forceMagnitude,
@@ -219,7 +252,7 @@ onMounted(async () => {
   window.addEventListener('keydown', async (event) => {
     if (event.code === 'Space') {
       // Remove only the dynamic bodies
-      bodies.forEach(body => Matter.World.remove(world, body));
+      bodies.forEach((body) => Matter.World.remove(world, body));
       bodies.length = 0;
 
       // Cycle to the next prefix
@@ -230,7 +263,6 @@ onMounted(async () => {
     }
   });
 });
-
 </script>
 
 <style></style>
