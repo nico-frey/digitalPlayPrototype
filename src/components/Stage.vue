@@ -12,6 +12,7 @@ window.decomp = decomp; // Register poly-decomp globally
 
 const scene = ref(null);
 let splittingMode = ref(true); // Toggle for splitting mode
+let currentAntiGravityZone = null; // Track the current anti-gravity zone
 
 const shapeProperties = {
   papagei: {
@@ -20,10 +21,10 @@ const shapeProperties = {
     frictionAir: 0.0000001,
     density: 1,
     mass: 5,
-    scaleFactor: 1.4 ,
+    scaleFactor: 1.4,
     duplicateCount: 1,
   },
-  wache: { 
+  wache: {
     restitution: 0,
     friction: 99999999,
     frictionAir: 0.01,
@@ -199,8 +200,6 @@ onMounted(async () => {
 
   await loadSVGs(svgFolderPath, render, world, bodies, prefixes[currentPrefixIndex]);
 
-  const mouse = Mouse.create(render.canvas);
-
   // Clamp body velocity to prevent glitching
   Events.on(engine, 'beforeUpdate', () => {
     const maxVelocity = 10;
@@ -216,29 +215,6 @@ onMounted(async () => {
 
   // Reset positions for bodies that escape
   Events.on(engine, 'afterUpdate', () => {
-    if (!mouse.position.x) return;
-
-    // Smoothly move the attractor/repeller body towards the mouse
-    Body.translate(attractiveBody, {
-      x: (mouse.position.x - attractiveBody.position.x) * 0.12,
-      y: (mouse.position.y - attractiveBody.position.y) * 0.12,
-    });
-
-    // Check mouse button state for repeller or attractor
-    const isRepeller = mouse.button === 0 && mouse.sourceEvents.mousemove?.buttons === 1; // Left-click held
-
-    bodies.forEach((body) => {
-      const dx = attractiveBody.position.x - body.position.x;
-      const dy = attractiveBody.position.y - body.position.y;
-      const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-      const forceMagnitude = ((isRepeller ? -0.0005 : 0.0005) * body.mass) / distance;
-
-      Body.applyForce(body, body.position, {
-        x: dx * forceMagnitude,
-        y: dy * forceMagnitude,
-      });
-    });
-
     // Remove bodies that go out of bounds
     bodies.forEach((body) => {
       if (
@@ -249,6 +225,102 @@ onMounted(async () => {
       ) {
         Matter.World.remove(world, body);
         bodies.splice(bodies.indexOf(body), 1);
+      }
+    });
+
+    // Merge shapes of the same kind if they are in close proximity
+    const mergeDistance = 100; // Distance threshold for merging
+    const shapesToMerge = {};
+
+    bodies.forEach((body) => {
+      const shapeType = body.render.fillStyle; // Assuming fillStyle is used to identify shape type
+      if (!shapesToMerge[shapeType]) {
+        shapesToMerge[shapeType] = [];
+      }
+      shapesToMerge[shapeType].push(body);
+    });
+
+    Object.values(shapesToMerge).forEach((shapeBodies) => {
+      for (let i = 0; i < shapeBodies.length; i++) {
+        for (let j = i + 1; j < shapeBodies.length; j++) {
+          for (let k = j + 1; k < shapeBodies.length; k++) {
+            const bodyA = shapeBodies[i];
+            const bodyB = shapeBodies[j];
+            const bodyC = shapeBodies[k];
+
+            const distanceAB = Matter.Vector.magnitude(Matter.Vector.sub(bodyA.position, bodyB.position));
+            const distanceAC = Matter.Vector.magnitude(Matter.Vector.sub(bodyA.position, bodyC.position));
+            const distanceBC = Matter.Vector.magnitude(Matter.Vector.sub(bodyB.position, bodyC.position));
+
+            if (distanceAB < mergeDistance && distanceAC < mergeDistance && distanceBC < mergeDistance) {
+              console.log('Merging bodies:', bodyA, bodyB, bodyC);
+
+              // Merge bodies
+              const mergedVertices = Matter.Vertices.hull([...bodyA.vertices, ...bodyB.vertices, ...bodyC.vertices]);
+              const mergedBody = Matter.Bodies.fromVertices(bodyA.position.x, bodyA.position.y, mergedVertices, {
+                mass: bodyA.mass + bodyB.mass + bodyC.mass,
+                density: bodyA.density,
+                friction: bodyA.friction,
+                frictionAir: bodyA.frictionAir,
+                restitution: bodyA.restitution,
+                render: bodyA.render,
+              });
+
+              Matter.World.add(world, mergedBody);
+              bodies.push(mergedBody);
+
+              // Remove original bodies
+              Matter.World.remove(world, bodyA);
+              Matter.World.remove(world, bodyB);
+              Matter.World.remove(world, bodyC);
+              bodies.splice(bodies.indexOf(bodyA), 1);
+              bodies.splice(bodies.indexOf(bodyB), 1);
+              bodies.splice(bodies.indexOf(bodyC), 1);
+
+              // Remove any existing anti-gravity zone
+              if (currentAntiGravityZone) {
+                Matter.World.remove(world, currentAntiGravityZone);
+                Events.off(engine, 'beforeUpdate', applyAntiGravity);
+              }
+
+              // Create an anti-gravity area at the collision point
+              const antiGravityZone = Bodies.circle(mergedBody.position.x, mergedBody.position.y, 150, {
+                isStatic: true,
+                isSensor: true,
+                render: { fillStyle: 'rgba(0, 255, 0, 0.0)' },
+              });
+              World.add(world, antiGravityZone);
+              currentAntiGravityZone = antiGravityZone;
+
+              // Apply anti-gravity effect
+              const applyAntiGravity = () => {
+                bodies.forEach((body) => {
+                  const dx = body.position.x - antiGravityZone.position.x;
+                  const dy = body.position.y - antiGravityZone.position.y;
+                  const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+                  if (distance < 150) {
+                    const forceMagnitude = -0.0005 * body.mass / distance; // Use the same repulsion force as mouse click
+                    Matter.Body.applyForce(body, body.position, { x: dx * forceMagnitude, y: dy * forceMagnitude });
+                  }
+                });
+              };
+
+              Events.on(engine, 'beforeUpdate', applyAntiGravity);
+
+              // Remove the anti-gravity zone after 5 seconds
+              setTimeout(() => {
+                Matter.World.remove(world, antiGravityZone);
+                Events.off(engine, 'beforeUpdate', applyAntiGravity);
+                currentAntiGravityZone = null;
+              }, 5000);
+
+              // Break out of the loops to avoid further processing of merged bodies
+              i = shapeBodies.length;
+              j = shapeBodies.length;
+              k = shapeBodies.length;
+            }
+          }
+        }
       }
     });
   });
