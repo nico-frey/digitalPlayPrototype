@@ -25,7 +25,7 @@ const shapeProperties = {
   wache: {
     restitution: 0,
     friction: 99999999,
-    frictionAir: 0.2,
+    frictionAir: 0.01,
     density: 1,
     mass: 5,
     scaleFactor: 0.5,
