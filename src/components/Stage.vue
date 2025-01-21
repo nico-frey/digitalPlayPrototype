@@ -11,6 +11,7 @@ import decomp from 'poly-decomp';
 window.decomp = decomp; // Register poly-decomp globally
 
 const scene = ref(null);
+let splittingMode = ref(true); // Toggle for splitting mode
 
 const shapeProperties = {
   papagei: {
@@ -19,10 +20,10 @@ const shapeProperties = {
     frictionAir: 0.0000001,
     density: 1,
     mass: 5,
-    scaleFactor: 0.2,
-    duplicateCount: 20,
+    scaleFactor: 1.4 ,
+    duplicateCount: 1,
   },
-  wache: {
+  wache: { 
     restitution: 0,
     friction: 99999999,
     frictionAir: 0.01,
@@ -38,7 +39,7 @@ async function loadSVGs(folderPath, render, world, bodies, prefix) {
   const files = await response.json();
 
   for (const fileName of files) {
-    if (!fileName.startsWith(prefix)) continue; // Only load shapes with the specified prefix
+    if (!fileName.startsWith(prefix)) continue;
 
     const svgResponse = await fetch(`${folderPath}/${fileName}`);
     const svgText = await svgResponse.text();
@@ -70,7 +71,6 @@ async function loadSVGs(folderPath, render, world, bodies, prefix) {
         }));
 
         for (let i = 0; i < shapeProps.duplicateCount; i++) {
-          // Use duplicateCount property
           const body = Matter.Bodies.fromVertices(
             Matter.Common.random(0, render.options.width),
             Matter.Common.random(0, render.options.height),
@@ -82,9 +82,9 @@ async function loadSVGs(folderPath, render, world, bodies, prefix) {
               frictionAir: shapeProps.frictionAir,
               restitution: shapeProps.restitution,
               render: {
-                fillStyle: path.getAttribute('fill') || '#FF0000', // Default color, can be customized
-                strokeStyle: path.getAttribute('fill') || '#FF0000', // Stroke in fill color to hide gaps
-                lineWidth: 1, // stroke width 
+                fillStyle: path.getAttribute('fill') || '#FF0000',
+                strokeStyle: path.getAttribute('fill') || '#FF0000',
+                lineWidth: 1,
               },
             },
             {
@@ -125,8 +125,8 @@ onMounted(async () => {
   } = Matter;
 
   const engine = Engine.create({
-    positionIterations: 10, // Increase for more accurate collision positioning
-    velocityIterations: 10, // Increase for better collision velocity adjustments
+    positionIterations: 10,
+    velocityIterations: 10,
   });
   const world = engine.world;
   world.gravity.scale = 0;
@@ -150,7 +150,7 @@ onMounted(async () => {
   const boundaries = [
     Bodies.rectangle(render.options.width / 2, -50, render.options.width, 100, {
       isStatic: true,
-      restitution: 0.5, // Elasticity for boundaries
+      restitution: 0.5,
     }),
     Bodies.rectangle(
       render.options.width / 2,
@@ -193,9 +193,9 @@ onMounted(async () => {
   World.add(world, attractiveBody);
 
   const bodies = [];
-  const svgFolderPath = '/svgs'; // Path to your SVG folder (inside public folder)
-  const prefixes = ['papagei', 'wache']; // List of prefixes
-  let currentPrefixIndex = 0; // Initial index
+  const svgFolderPath = '/svgs';
+  const prefixes = ['papagei', 'wache'];
+  let currentPrefixIndex = 0;
 
   await loadSVGs(svgFolderPath, render, world, bodies, prefixes[currentPrefixIndex]);
 
@@ -203,7 +203,7 @@ onMounted(async () => {
 
   // Clamp body velocity to prevent glitching
   Events.on(engine, 'beforeUpdate', () => {
-    const maxVelocity = 10; // Adjust as needed for reasonable speed
+    const maxVelocity = 10;
     bodies.forEach((body) => {
       if (Math.abs(body.velocity.x) > maxVelocity) {
         body.velocity.x = Math.sign(body.velocity.x) * maxVelocity;
@@ -231,7 +231,7 @@ onMounted(async () => {
       const dx = attractiveBody.position.x - body.position.x;
       const dy = attractiveBody.position.y - body.position.y;
       const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-      const forceMagnitude = ((isRepeller ? -0.0005 : 0.0005) * body.mass) / distance; // Negative for repeller
+      const forceMagnitude = ((isRepeller ? -0.0005 : 0.0005) * body.mass) / distance;
 
       Body.applyForce(body, body.position, {
         x: dx * forceMagnitude,
@@ -239,15 +239,59 @@ onMounted(async () => {
       });
     });
 
+    // Remove bodies that go out of bounds
     bodies.forEach((body) => {
-      const dx = attractiveBody.position.x - body.position.x;
-      const dy = attractiveBody.position.y - body.position.y;
-      const distance = Math.sqrt(dx * dx + dy * dy) || 1;
-      const forceMagnitude = (0.00005 * body.mass) / distance;
-
-      Body.applyForce(body, body.position, { x: dx * forceMagnitude, y: dy * forceMagnitude });
+      if (
+        body.position.x < -100 ||
+        body.position.x > render.options.width + 100 ||
+        body.position.y < -100 ||
+        body.position.y > render.options.height + 100
+      ) {
+        Matter.World.remove(world, body);
+        bodies.splice(bodies.indexOf(body), 1);
+      }
     });
   });
+
+  setInterval(() => {
+    if (!splittingMode.value || bodies.length === 0) return;
+
+    const largestBody = bodies.reduce((max, body) =>
+      body.bounds.max.x - body.bounds.min.x > max.bounds.max.x - max.bounds.min.x ? body : max
+    );
+
+    const scaleFactor = 0.65;
+    const leftVertices = largestBody.vertices.map((v) => ({
+      x: largestBody.position.x + (v.x - largestBody.position.x) * scaleFactor - 20,
+      y: largestBody.position.y + (v.y - largestBody.position.y) * scaleFactor,
+    }));
+    const rightVertices = largestBody.vertices.map((v) => ({
+      x: largestBody.position.x + (v.x - largestBody.position.x) * scaleFactor + 20,
+      y: largestBody.position.y + (v.y - largestBody.position.y) * scaleFactor,
+    }));
+
+    const leftBody = Bodies.fromVertices(largestBody.position.x - 20, largestBody.position.y, leftVertices, {
+      restitution: largestBody.restitution,
+      friction: largestBody.friction,
+      density: largestBody.density,
+      render: largestBody.render,
+    });
+    const rightBody = Bodies.fromVertices(largestBody.position.x + 20, largestBody.position.y, rightVertices, {
+      restitution: largestBody.restitution,
+      friction: largestBody.friction,
+      density: largestBody.density,
+      render: largestBody.render,
+    });
+
+    Body.applyForce(leftBody, leftBody.position, { x: -0.02, y: 0 });
+    Body.applyForce(rightBody, rightBody.position, { x: 0.02, y: 0 });
+
+    World.remove(world, largestBody);
+    bodies.splice(bodies.indexOf(largestBody), 1);
+
+    World.add(world, [leftBody, rightBody]);
+    bodies.push(leftBody, rightBody);
+  }, 1000);
 
   window.addEventListener('keydown', async (event) => {
     if (event.code === 'Space') {
@@ -260,6 +304,8 @@ onMounted(async () => {
 
       // Load new shapes
       await loadSVGs(svgFolderPath, render, world, bodies, prefixes[currentPrefixIndex]);
+    } else if (event.code === 'KeyS') {
+      splittingMode.value = !splittingMode.value; // Toggle splitting mode
     }
   });
 });
