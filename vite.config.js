@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      Matter: "matter-js", // Explicit alias for "Matter"
+      Matter: "matter-js",
     },
   },
 })
