@@ -1,5 +1,6 @@
 <template>
   <div ref="scene"></div>
+  <div class="message-display">{{ message }}</div>
 </template>
 
 <script setup>
@@ -13,6 +14,7 @@ window.decomp = decomp; // Register poly-decomp globally
 const scene = ref(null);
 let splittingMode = ref(true); // Toggle for splitting mode
 let currentAntiGravityZone = null; // Track the current anti-gravity zone
+const message = ref(''); // Reactive variable to store the received message
 
 const shapeProperties = {
   papagei: {
@@ -200,6 +202,26 @@ onMounted(async () => {
 
   await loadSVGs(svgFolderPath, render, world, bodies, prefixes[currentPrefixIndex]);
 
+  // WebSocket connection
+  const socket = new WebSocket('ws://10.21.28.111:8080');
+  socket.onopen = () => {
+    console.log('Connected to server');
+  };
+
+  socket.onmessage = (event) => {
+    console.log('onmessage event triggered');
+    console.log(`Message from server: ${event.data}`);
+    message.value = event.data; // Store the received message
+  };
+
+  socket.onerror = (error) => {
+    console.error('WebSocket error:', error);
+  };
+
+  socket.onclose = (event) => {
+    console.log('WebSocket connection closed:', event);
+  };
+
   // Clamp body velocity to prevent glitching
   Events.on(engine, 'beforeUpdate', () => {
     const maxVelocity = 10;
@@ -383,4 +405,14 @@ onMounted(async () => {
 });
 </script>
 
-<style></style>
+<style>
+.message-display {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 5px;
+}
+</style>
