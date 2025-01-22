@@ -1,7 +1,6 @@
 <template>
   <div id="app">
-    <Stage />
-    <!-- <InitSerial /> -->
+    <router-view></router-view>
   </div>
 </template>
 
@@ -13,7 +12,7 @@ export default {
   name: 'App',
   components: {
     Stage,
-    InitSerial
+    InitSerial,
   },
 };
 </script>
