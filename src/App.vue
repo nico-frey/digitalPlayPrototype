@@ -6,6 +6,7 @@
 
 <script>
 import InitSerial from './components/InitSerial.vue';
+import Sequence from './components/Sequence.vue';
 import Stage from './components/Stage.vue';
 
 export default {
@@ -13,6 +14,7 @@ export default {
   components: {
     Stage,
     InitSerial,
+    Sequence
   },
 };
 </script>

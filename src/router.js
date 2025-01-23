@@ -1,23 +1,24 @@
-import { createRouter, createWebHistory } from 'vue-router';
-import Interface from './components/Interface.vue';
-import Stage from './components/Stage.vue';
+import { createRouter, createWebHistory } from "vue-router"
+import Interface from "./components/Interface.vue"
+import Stage from "./components/Stage.vue"
+import Sequence from "./components/Sequence.vue"
 
 const routes = [
   {
-    path: '/',
-    name: 'Stage',
+    path: "/",
+    name: "Stage",
     component: Stage,
   },
   {
-    path: '/interface',
-    name: 'Interface',
+    path: "/interface",
+    name: "Interface",
     component: Interface,
   },
-];
+]
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-});
+})
 
-export default router;  
+export default router

@@ -82,6 +82,30 @@ async function loadSVGs(folderPath, render, world, scaleFactor) {
   }
 }
 
+function createNewShape(render, scaleFactor) {
+
+  window.decomp = decomp;
+  // Example: Create a simple rectangle as the new shape
+  const newShape = Matter.Bodies.rectangle(
+    render.options.width / 2,
+    -50 * scaleFactor,
+    50 * scaleFactor,
+    50 * scaleFactor,
+    {
+      friction: 0.01,
+      frictionAir: 0.01,
+      restitution: 0.5,
+      render: {
+        fillStyle: '#FF0000', // Randomize color if needed
+      },
+    }
+  );
+
+  console.log('Created new shape:', newShape);
+  return newShape;
+}
+
+
 function addNextShape(render, world, scaleFactor) {
   if (shapes.length === 0) {
     console.log('No shapes available to add.');
@@ -89,33 +113,79 @@ function addNextShape(render, world, scaleFactor) {
   }
 
   if (currentShapeIndex >= shapes.length) {
-    currentShapeIndex = 0; // Reset to the first shape
+    currentShapeIndex = 0; // Wrap around to the start of the array
   }
 
   const nextShape = shapes[currentShapeIndex];
 
-  // Reset shape properties
-  Matter.Body.setPosition(nextShape, { x: render.options.width / 2, y: -50 * scaleFactor });
-  Matter.Body.setVelocity(nextShape, { x: 0, y: 0 });
-  Matter.Body.setAngularVelocity(nextShape, 0);
-  Matter.Body.setAngle(nextShape, 0);
+  // Fully reset all properties of the shape
+  Matter.Body.set(nextShape, {
+    position: { x: render.options.width / 2, y: -50 * scaleFactor * (currentShapeIndex + 1) },
+    velocity: { x: 0, y: 0 },
+    angle: 0,
+    angularVelocity: 0,
+    force: { x: 0, y: 0 },
+    torque: 0,
+  });
 
-  // Ensure friction and other properties are reset
+  // Explicitly reset friction and restitution
   nextShape.friction = 0.01;
   nextShape.frictionAir = 0.01;
   nextShape.restitution = 0.5;
 
+  // Add the shape to the world and visibleShapes array
   Matter.World.add(world, nextShape);
   visibleShapes.push(nextShape);
   currentShapeIndex++;
+
   console.log(`Added new shape. Current shape index: ${currentShapeIndex}`);
 }
 
 function removeShapeAndAddNext(render, world, scaleFactor, shape) {
+  // 1. Remove the old shape from the world
   Matter.World.remove(world, shape);
+
+  // 2. Remove the shape from the `visibleShapes` array
   visibleShapes = visibleShapes.filter(s => s !== shape);
-  addNextShape(render, world, scaleFactor);
+
+  console.log('Shape removed completely:', shape);
+
+  // 3. Check if there are any shapes left to add
+  if (shapes.length === 0) {
+    console.log('No more shapes available in the array.');
+    return;
+  }
+
+  // 4. Select the next shape from the shapes array
+  if (currentShapeIndex >= shapes.length) {
+    currentShapeIndex = 0; // Wrap around to the first shape
+  }
+  const originalShape = shapes[currentShapeIndex];
+  currentShapeIndex++;
+
+  // 5. Create a new copy of the shape to ensure no residual state
+  const newShape = Matter.Bodies.fromVertices(
+    render.options.width / 2,
+    -50 * scaleFactor,
+    originalShape.vertices, // Use the vertices from the original shape
+    {
+      friction: 0.01,
+      frictionAir: 0.01,
+      restitution: 0.5,
+      render: originalShape.render, // Copy rendering properties
+    }
+  );
+
+  // 6. Add the new shape to the world and visibleShapes
+  Matter.World.add(world, newShape);
+  visibleShapes.push(newShape);
+
+  console.log('Added new shape. Current shape index:', currentShapeIndex);
+  console.log('Visible shapes count:', visibleShapes.length);
 }
+
+
+
 
 onMounted(async () => {
   const { Engine, Render, Runner, World, Bodies, Mouse, MouseConstraint } = Matter;
