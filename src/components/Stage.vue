@@ -245,22 +245,35 @@ function sendMIDI(note, velocity = 127) {
   }, 200);
 }
 
+const recentCollisions = new Set();
 
-// Add collision listener
 function setupCollisionEvents(engine) {
   Matter.Events.on(engine, 'collisionStart', (event) => {
     const pairs = event.pairs;
 
     pairs.forEach((pair) => {
+      const pairKey = `${pair.bodyA.id}-${pair.bodyB.id}`; // Unique key for the collision pair
+
+      if (recentCollisions.has(pairKey)) {
+        return; // Skip if this pair is already on cooldown
+      }
+
       console.log('Collision detected between:', pair.bodyA.label, pair.bodyB.label);
 
-      // Test if MIDI is being triggered
-      console.log('Sending MIDI note...');
-      const randomNote = Math.floor(Math.random() * (72 - 60 + 1)) + 60; // Notes between C4 and C5
+      // Send MIDI
+      const randomNote = Math.floor(Math.random() * (72 - 100 + 1)) + 80; // Notes between C4 and C5
       sendMIDI(randomNote);
+
+      // Add to cooldown set and remove after 200ms
+      recentCollisions.add(pairKey);
+      setTimeout(() => {
+        recentCollisions.delete(pairKey);
+      }, 999999);
     });
   });
 }
+
+
 
 
 
