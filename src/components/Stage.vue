@@ -111,7 +111,7 @@ function createNewShape(render, scaleFactor, originalShape) {
     }
 
     // Convert the SVG path into vertices
-    let vertices = Matter.Svg.pathToVertices(pathElement, 30); // Adjust precision as needed
+    let vertices = Matter.Svg.pathToVertices(pathElement, 30);
 
     // Scale the vertices
     vertices = vertices.map(vertex => ({
@@ -128,7 +128,11 @@ function createNewShape(render, scaleFactor, originalShape) {
         friction: 0.01,
         frictionAir: 0.01,
         restitution: 0.5,
-        render: originalShape.render,
+        render: {
+          fillStyle: originalShape.render.fillStyle || '#FF0000',
+          strokeStyle: originalShape.render.strokeStyle || 'transparent', // Reapply strokeStyle
+          lineWidth: originalShape.render.lineWidth || 2, // Reapply lineWidth
+        },
       },
       {
         tolerance: 0.01,
@@ -141,7 +145,6 @@ function createNewShape(render, scaleFactor, originalShape) {
     return null;
   }
 }
-
 
 function addNextShape(render, world, scaleFactor) {
   if (shapes.length === 0) {
@@ -196,6 +199,71 @@ function removeShapeAndAddNext(render, world, scaleFactor, shape) {
   console.log('Added new shape. Visible shapes count:', visibleShapes.length);
 }
 
+let midiAccess = null;
+let midiOutput = null;
+
+// Initialize MIDI and set up the output device
+async function initMIDI() {
+  try {
+    midiAccess = await navigator.requestMIDIAccess();
+    console.log('MIDI access granted.');
+
+    // Log available outputs
+    for (const output of midiAccess.outputs.values()) {
+      console.log('Available MIDI output:', output.name);
+      if (output.name === 'customDevice Bus 1') {
+        midiOutput = output;
+        console.log('MIDI output device selected:', output.name);
+      }
+    }
+
+    if (!midiOutput) {
+      console.error('Custom MIDI device "customDevice" not found. Available devices:', Array.from(midiAccess.outputs.values()).map(o => o.name));
+    }
+  } catch (error) {
+    console.error('Failed to initialize MIDI:', error);
+  }
+}
+
+
+// Function to send a MIDI note
+function sendMIDI(note, velocity = 127) {
+  if (!midiOutput) {
+    console.warn('MIDI output not initialized.');
+    return;
+  }
+
+  const noteOnMessage = [0x90, note, velocity]; // Note On
+  const noteOffMessage = [0x80, note, velocity]; // Note Off
+
+  console.log('Sending MIDI Note On:', noteOnMessage);
+  midiOutput.send(noteOnMessage);
+
+  setTimeout(() => {
+    console.log('Sending MIDI Note Off:', noteOffMessage);
+    midiOutput.send(noteOffMessage);
+  }, 200);
+}
+
+
+// Add collision listener
+function setupCollisionEvents(engine) {
+  Matter.Events.on(engine, 'collisionStart', (event) => {
+    const pairs = event.pairs;
+
+    pairs.forEach((pair) => {
+      console.log('Collision detected between:', pair.bodyA.label, pair.bodyB.label);
+
+      // Test if MIDI is being triggered
+      console.log('Sending MIDI note...');
+      const randomNote = Math.floor(Math.random() * (72 - 60 + 1)) + 60; // Notes between C4 and C5
+      sendMIDI(randomNote);
+    });
+  });
+}
+
+
+
 onMounted(async () => {
   const { Engine, Render, Runner, World, Bodies, Mouse, MouseConstraint } = Matter;
 
@@ -211,8 +279,10 @@ onMounted(async () => {
       height: window.innerHeight,
       wireframes: false,
       background: 'rgb(255,255,255)',
+      hasBounds: false,
     },
   });
+
 
   Render.run(render);
 
@@ -262,6 +332,11 @@ onMounted(async () => {
   });
 
   World.add(world, mouseConstraint);
+
+  await initMIDI();
+
+  setupCollisionEvents(engine);
+
 });
 </script>
 
