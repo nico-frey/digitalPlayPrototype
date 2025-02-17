@@ -320,7 +320,7 @@ onMounted(async () => {
   World.add(world, boundaries);
 
   const svgFolderPath = '/svgs';
-  const scaleFactor = 1.4;
+  const scaleFactor = 1.5;
   await loadSVGs(svgFolderPath, render, world, scaleFactor);
 
   const mouse = Mouse.create(render.canvas);
