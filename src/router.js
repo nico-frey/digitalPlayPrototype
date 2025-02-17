@@ -6,13 +6,13 @@ import Sequence from "./components/Sequence.vue"
 const routes = [
   {
     path: "/",
-    name: "Stage",
-    component: Stage,
+    name: "Squence",
+    component: Sequence,
   },
   {
-    path: "/interface",
-    name: "Interface",
-    component: Interface,
+    path: "/legacy",
+    name: "Old Stage",
+    component: Stage,
   },
 ]
 

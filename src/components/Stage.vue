@@ -130,7 +130,7 @@ function createNewShape(render, scaleFactor, originalShape) {
         restitution: 0.5,
         render: {
           fillStyle: originalShape.render.fillStyle || '#FF0000',
-          strokeStyle: originalShape.render.strokeStyle || 'transparent', // Reapply strokeStyle
+          strokeStyle: originalShape.render.strokeStyle || '#FF0000', // Reapply strokeStyle
           lineWidth: originalShape.render.lineWidth || 2, // Reapply lineWidth
         },
       },
