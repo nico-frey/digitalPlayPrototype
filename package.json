@@ -10,18 +10,21 @@
     "serve:ws": "node server/server.js"
   },
   "dependencies": {
+    "@dimforge/rapier2d": "^0.14.0",
     "matter-attractors": "0.1.4",
     "matter-js": "0.14.2",
     "pathseg": "^1.2.1",
     "poly-decomp": "^0.3.0",
     "svg-path-properties": "^1.3.0",
+    "three": "^0.173.0",
     "vue": "^3.5.13",
-    "ws": "^8.18.0",
-    "vue-router": "^4.5.0"
+    "vue-router": "^4.5.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",
     "gh-pages": "^6.3.0",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "vite-plugin-wasm": "^3.4.1"
   }
 }

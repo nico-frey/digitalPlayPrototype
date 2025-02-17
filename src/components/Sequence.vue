@@ -1,229 +1,143 @@
-<template>
-    <div ref="scene"></div>
-</template>
+        <template>
+            <div ref="sceneContainer"></div>
+        </template>
 
 <script setup>
-import 'pathseg'; // Import pathseg polyfill
-import * as Matter from 'matter-js';
-import { onMounted, ref, onBeforeUnmount } from 'vue';
-import decomp from 'poly-decomp';
+import { ref, onMounted, onBeforeUnmount } from "vue";
+import * as THREE from "three";
 
-window.decomp = decomp; // Ensure poly-decomp is globally available for Matter.js
+const sceneContainer = ref(null);
+let scene, camera, renderer, world;
+let RAPIER;
 
-const scene = ref(null);
-let shapes = [];
-let currentShapeIndex = 0;
-let visibleShapes = [];
-let selectedShapeIndex = 0;
+async function init() {
+    await initPhysics();
+    world = new RAPIER.World(new RAPIER.Vector2(0, -9.81)); // ✅ Proper gravity
 
-async function loadSVGs(folderPath, render, world, scaleFactor) {
-    const response = await fetch(`${folderPath}/index.json`);
-    const files = await response.json();
+    // ✅ 9:16 aspect ratio setup
+    const aspectRatio = 9 / 16;
+    const viewHeight = 10;
+    const viewWidth = viewHeight * aspectRatio;
 
-    let yOffset = 0;
-    for (const fileName of files) {
-        const svgResponse = await fetch(`${folderPath}/${fileName}`);
-        const svgText = await svgResponse.text();
+    scene = new THREE.Scene();
+    camera = new THREE.OrthographicCamera(
+        -viewWidth / 2,
+        viewWidth / 2,
+        viewHeight / 2,
+        -viewHeight / 2,
+        0.1,
+        100
+    );
+    camera.position.z = 10;
 
-        const parser = new DOMParser();
-        const svgDocument = parser.parseFromString(svgText, 'image/svg+xml');
-        const svgPaths = svgDocument.querySelectorAll('path');
+    renderer = new THREE.WebGLRenderer({ alpha: true }); // ✅ Removes any unwanted background
+    renderer.setSize(window.innerHeight * aspectRatio, window.innerHeight);
+    sceneContainer.value.appendChild(renderer.domElement);
 
-        for (const path of svgPaths) {
-            const pathData = path.getAttribute('d');
-            if (!pathData) {
-                console.warn('Skipping path with no `d` attribute:', path);
-                continue;
-            }
+    createInvisibleBoundaries(viewWidth, viewHeight); // ✅ Walls exist, but aren’t visible
+    createShapes(); // ✅ Objects fall naturally
 
-            try {
-                let vertices = Matter.Svg.pathToVertices(path, 30);
-                vertices = vertices.map(vertex => ({
-                    x: vertex.x * scaleFactor,
-                    y: vertex.y * scaleFactor,
-                }));
-
-                const body = Matter.Bodies.fromVertices(
-                    render.options.width / 2,
-                    yOffset,
-                    vertices,
-                    {
-                        friction: 0.01,
-                        frictionAir: 0.01,
-                        restitution: 0.5,
-                        render: {
-                            fillStyle: path.getAttribute('fill') || '#FF0000',
-                            strokeStyle: path.getAttribute('fill') || '#FF0000',
-                            opacity: 1, // Default full opacity
-                            lineWidth: 1,
-                        },
-                    },
-                    { tolerance: 0.01 }
-                );
-
-                shapes.push({
-                    body,
-                    pathData,
-                    render: {
-                        fillStyle: path.getAttribute('fill') || '#FF0000',
-                        strokeStyle: path.getAttribute('fill') || '#FF0000',
-                        opacity: 1, // Store default opacity
-                    },
-                });
-
-                yOffset += 50 * scaleFactor;
-            } catch (error) {
-                console.error('Error processing path:', path, error);
-            }
-        }
-    }
-
-    for (let i = 0; i < 6 && i < shapes.length; i++) {
-        Matter.World.add(world, shapes[i].body);
-        visibleShapes.push(shapes[i].body);
-        currentShapeIndex++;
-    }
-    highlightSelectedShape();
+    animate();
+    window.addEventListener("resize", onWindowResize);
 }
 
-function highlightSelectedShape() {
-    visibleShapes.forEach((shape, index) => {
-        if (!shape.originalFillStyle) {
-            shape.originalFillStyle = shape.render.fillStyle;
-        }
+// ✅ Handle canvas resizing
+function onWindowResize() {
+    const aspectRatio = 9 / 16;
+    const newWidth = window.innerHeight * aspectRatio;
+    const newHeight = window.innerHeight;
 
-        shape.render.fillStyle = index === selectedShapeIndex
-            ? `rgba(255, 255, 255, 0.5)` // 50% transparent
-            : shape.originalFillStyle; // Restore original color
-    });
+    camera.left = -newWidth / 2;
+    camera.right = newWidth / 2;
+    camera.top = newHeight / 2;
+    camera.bottom = -newHeight / 2;
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(newWidth, newHeight);
 }
 
-function cycleSelection(direction) {
-    if (visibleShapes.length === 0) return;
-    if (direction === 'right') {
-        selectedShapeIndex = (selectedShapeIndex + 1) % visibleShapes.length;
-    } else if (direction === 'left') {
-        selectedShapeIndex = (selectedShapeIndex - 1 + visibleShapes.length) % visibleShapes.length;
-    }
-    highlightSelectedShape();
+// ✅ Load Rapier properly
+async function initPhysics() {
+    RAPIER = await import("@dimforge/rapier2d");
 }
 
-function createNewShape(render, scaleFactor, originalShape) {
-    window.decomp = decomp;
+// ✅ Create "invisible" physics boundaries (left, right, bottom)
+function createInvisibleBoundaries(viewWidth, viewHeight) {
+    const thickness = 0.5; // Slightly thicker for stability
 
-    const pathData = originalShape.pathData;
-    if (!pathData) {
-        console.error('Missing path data for shape:', originalShape);
-        return null;
-    }
+    // ✅ Bottom collider (floor)
+    const bottomBodyDesc = RAPIER.RigidBodyDesc.fixed();
+    const bottomBody = world.createRigidBody(bottomBodyDesc);
+    const bottomColliderDesc = RAPIER.ColliderDesc.cuboid(viewWidth / 2, thickness);
+    world.createCollider(bottomColliderDesc, bottomBody);
+    bottomBody.setTranslation(new RAPIER.Vector2(0, -viewHeight / 2)); // ✅ Fix collider placement
 
-    try {
-        const parser = new DOMParser();
-        const svgDoc = parser.parseFromString(`<svg xmlns="http://www.w3.org/2000/svg"><path d="${pathData}"/></svg>`, 'image/svg+xml');
-        const pathElement = svgDoc.querySelector('path');
+    // ✅ Left collider (wall)
+    const leftBodyDesc = RAPIER.RigidBodyDesc.fixed();
+    const leftBody = world.createRigidBody(leftBodyDesc);
+    const leftColliderDesc = RAPIER.ColliderDesc.cuboid(thickness, viewHeight / 2);
+    world.createCollider(leftColliderDesc, leftBody);
+    leftBody.setTranslation(new RAPIER.Vector2(-viewWidth / 2, 0)); // ✅ Fix collider placement
 
-        if (!pathElement) {
-            console.error('Failed to parse path data into SVG path element:', pathData);
-            return null;
-        }
-
-        let vertices = Matter.Svg.pathToVertices(pathElement, 30);
-        vertices = vertices.map(vertex => ({
-            x: vertex.x * scaleFactor,
-            y: vertex.y * scaleFactor,
-        }));
-
-        return Matter.Bodies.fromVertices(
-            render.options.width / 2,
-            -50 * scaleFactor,
-            vertices,
-            {
-                friction: 0.01,
-                frictionAir: 0.01,
-                restitution: 0.5,
-                render: {
-                    fillStyle: originalShape.render.fillStyle,
-                    strokeStyle: originalShape.render.strokeStyle,
-                    lineWidth: originalShape.render.lineWidth || 2,
-                    opacity: 1,
-                },
-            },
-            { tolerance: 0.01 }
-        );
-    } catch (error) {
-        console.error('Error creating shape from path:', pathData, error);
-        return null;
-    }
+    // ✅ Right collider (wall)
+    const rightBodyDesc = RAPIER.RigidBodyDesc.fixed();
+    const rightBody = world.createRigidBody(rightBodyDesc);
+    const rightColliderDesc = RAPIER.ColliderDesc.cuboid(thickness, viewHeight / 2);
+    world.createCollider(rightColliderDesc, rightBody);
+    rightBody.setTranslation(new RAPIER.Vector2(viewWidth / 2, 0)); // ✅ Fix collider placement
 }
 
-function removeSelectedShape(render, world, scaleFactor) {
-    if (visibleShapes.length <= 1) return;
-
-    const shapeToRemove = visibleShapes[selectedShapeIndex];
-    Matter.World.remove(world, shapeToRemove);
-    visibleShapes.splice(selectedShapeIndex, 1);
-
-    if (currentShapeIndex >= shapes.length) {
-        currentShapeIndex = 0;
-    }
-
-    const newShape = createNewShape(render, scaleFactor, shapes[currentShapeIndex]);
-    if (newShape) {
-        Matter.World.add(world, newShape);
-        visibleShapes.push(newShape);
-        currentShapeIndex++;
-    }
-
-    if (selectedShapeIndex >= visibleShapes.length) {
-        selectedShapeIndex = 0;
-    }
-    highlightSelectedShape();
-}
-
-function handleKeyDown(event, render, world, scaleFactor) {
-    if (event.key === 'ArrowRight') {
-        cycleSelection('right');
-    } else if (event.key === 'ArrowLeft') {
-        cycleSelection('left');
-    } else if (event.key === 'Enter') {
-        removeSelectedShape(render, world, scaleFactor);
-    }
-}
-
-onMounted(async () => {
-    const { Engine, Render, Runner, World, Bodies } = Matter;
-    const engine = Engine.create();
-    const world = engine.world;
-    world.gravity.y = 1;
-    const render = Render.create({
-        element: scene.value,
-        engine: engine,
-        options: {
-            width: 500,
-            height: window.innerHeight,
-            wireframes: false,
-            background: 'rgb(255,255,255)',
-            hasBounds: false,
-        },
-    });
-    Render.run(render);
-    const runner = Runner.create();
-    Runner.run(runner, engine);
-    const svgFolderPath = '/svgs';
-    const scaleFactor = 1.5;
-    await loadSVGs(svgFolderPath, render, world, scaleFactor);
-
-    // Add static boundaries to prevent shapes from falling off the screen
-    const boundaries = [
-        Bodies.rectangle(render.options.width / 2, render.options.height + 50, render.options.width, 100, { isStatic: true, restitution: 0.5 }),
-        Bodies.rectangle(-50, render.options.height / 2, 100, render.options.height, { isStatic: true, restitution: 0.5 }),
-        Bodies.rectangle(render.options.width + 50, render.options.height / 2, 100, render.options.height, { isStatic: true, restitution: 0.5 }),
+// ✅ Create falling shapes with physics
+function createShapes() {
+    const positions = [
+        { x: -2, y: 5 },
+        { x: 0, y: 7 },
+        { x: 2, y: 6 },
     ];
-    World.add(world, boundaries);
-    window.addEventListener('keydown', (event) => handleKeyDown(event, render, world, scaleFactor));
+
+    positions.forEach((pos) => {
+        const shapeBodyDesc = RAPIER.RigidBodyDesc.dynamic()
+            .setTranslation(pos.x, pos.y)
+            .setLinearDamping(0.2) // ✅ Smooth movement
+            .setAngularDamping(0.3); // ✅ Adds rotation realism
+
+        const shapeBody = world.createRigidBody(shapeBodyDesc);
+        const shapeColliderDesc = RAPIER.ColliderDesc.cuboid(0.5, 0.5)
+            .setRestitution(0.5); // ✅ Adds bounce
+
+        world.createCollider(shapeColliderDesc, shapeBody);
+
+        const shapeGeometry = new THREE.BoxGeometry(1, 1);
+        const shapeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const shapeMesh = new THREE.Mesh(shapeGeometry, shapeMaterial);
+        shapeMesh.userData.rapierBody = shapeBody;
+        scene.add(shapeMesh);
+    });
+}
+
+// ✅ Animation loop (sync physics to Three.js)
+function animate() {
+    requestAnimationFrame(animate);
+    world.step();
+
+    scene.children.forEach((obj) => {
+        if (obj.userData.rapierBody) {
+            const pos = obj.userData.rapierBody.translation();
+            obj.position.set(pos.x, pos.y, 0);
+        }
+    });
+
+    renderer.render(scene, camera);
+}
+
+// ✅ Cleanup when unmounting
+onBeforeUnmount(() => {
+    window.removeEventListener("resize", onWindowResize);
 });
 
-onBeforeUnmount(() => {
-    window.removeEventListener('keydown', handleKeyDown);
+// ✅ Initialize everything on mount
+onMounted(() => {
+    init();
 });
 </script>
+
