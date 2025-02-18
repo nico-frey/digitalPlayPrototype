@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@dimforge/rapier2d": "^0.14.0",
+    "@dimforge/rapier2d-compat": "^0.14.0",
+    "@dimforge/rapier3d": "^0.14.0",
+    "earcut": "^3.0.1",
     "matter-attractors": "0.1.4",
     "matter-js": "0.14.2",
     "pathseg": "^1.2.1",
